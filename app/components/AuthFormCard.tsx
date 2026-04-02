@@ -33,7 +33,7 @@ export default function AuthFormCard({
       <View style={styles.backdropGlowTop} />
       <View style={styles.backdropGlowBottom} />
       <View style={styles.card}>
-        <BrandLockup caption="Booking dan tracking servis dalam satu tempat." compact />
+        <BrandLockup singleLine compact />
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
 
