@@ -23,12 +23,8 @@ export default function BrandLockup({ caption, compact = false, singleLine = fal
       >
         <Image
           source={brandLogo}
-          style={[
-            styles.logoImageBase,
-            singleLine ? styles.logoImageSingleLine : styles.logoImageDefault,
-            compact && (singleLine ? styles.logoImageSingleLineCompact : styles.logoImageDefaultCompact),
-          ]}
-          resizeMode="cover"
+          style={[styles.logoImageBase, compact && styles.logoImageCompact]}
+          resizeMode="contain"
         />
       </View>
 
@@ -94,28 +90,12 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   logoImageBase: {
-    width: '100%',
-    height: '100%',
+    width: '92%',
+    height: '92%',
   },
-  logoImageDefault: {
-    width: '184%',
-    height: '184%',
-    transform: [{ translateX: -2 }, { translateY: -18 }],
-  },
-  logoImageDefaultCompact: {
-    width: '196%',
-    height: '196%',
-    transform: [{ translateX: -2 }, { translateY: -18 }],
-  },
-  logoImageSingleLine: {
-    width: '192%',
-    height: '192%',
-    transform: [{ translateX: 0 }, { translateY: -18 }],
-  },
-  logoImageSingleLineCompact: {
-    width: '205%',
-    height: '205%',
-    transform: [{ translateX: 0 }, { translateY: -20 }],
+  logoImageCompact: {
+    width: '90%',
+    height: '90%',
   },
   textWrap: {
     flex: 1,
