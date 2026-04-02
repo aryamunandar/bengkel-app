@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GarageTheme } from '@/constants/garage-theme';
 import BrandLockup from '../components/BrandLockup';
@@ -11,7 +12,7 @@ const MENU_ITEMS: Array<{
   title: string;
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
-  route: '/products' | '/booking' | '/artikel' | '/track' | '/history' | '/about';
+  route: '/products' | '/booking' | '/artikel' | '/track' | '/history' | '/about' | '/admin';
 }> = [
   {
     title: 'Products',
@@ -53,17 +54,33 @@ const MENU_ITEMS: Array<{
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const displayName = user?.email ? user.email.split('@')[0] : 'guest';
 
-  useEffect(() => {
-    const load = async () => setOrders(await getOrders());
-    load();
+  const loadOrders = useCallback(async () => {
+    setOrders(await getOrders());
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadOrders();
+    }, [loadOrders])
+  );
 
   const activeOrders = orders.filter((order) => order.status !== 'Completed').length;
   const completedOrders = orders.filter((order) => order.status === 'Completed').length;
+  const menuItems = isAdmin
+    ? [
+        ...MENU_ITEMS,
+        {
+          title: 'Admin',
+          description: 'Kelola antrian, status order, dan riwayat servis pelanggan.',
+          icon: 'shield-checkmark-outline' as const,
+          route: '/admin' as const,
+        },
+      ]
+    : MENU_ITEMS;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -111,8 +128,8 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.grid}>
-        {MENU_ITEMS.map((item) => (
-          <TouchableOpacity key={item.route} style={styles.menuCard} onPress={() => router.push(item.route)}>
+        {menuItems.map((item) => (
+          <TouchableOpacity key={item.route} style={styles.menuCard} onPress={() => router.push(item.route as never)}>
             <View style={styles.menuBadge}>
               <Ionicons name={item.icon} size={20} color={GarageTheme.goldBright} />
             </View>

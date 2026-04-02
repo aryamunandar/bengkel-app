@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -25,6 +26,7 @@ export default function BookingScreen() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [bike, setBike] = useState('');
+  const [complaint, setComplaint] = useState('');
   const [service, setService] = useState<string>(SERVICE_TYPES[0]);
   const [date, setDate] = useState<string | null>(null);
   const [slot, setSlot] = useState<string | null>(null);
@@ -33,16 +35,20 @@ export default function BookingScreen() {
   const [showDateModal, setShowDateModal] = useState(false);
   const [showSlotModal, setShowSlotModal] = useState(false);
 
-  useEffect(() => {
-    const load = async () => setOrders(await getOrders());
-    load();
+  const loadOrders = useCallback(async () => {
+    setOrders(await getOrders());
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadOrders();
+    }, [loadOrders])
+  );
 
   if (!user) {
     return <RequireAuthNotice message="Silakan masuk untuk membuat pemesanan service dan menyimpan riwayat kendaraan." />;
   }
 
-  const reloadOrders = async () => setOrders(await getOrders());
   const makeKey = (dateValue: Date) => dateValue.toISOString().slice(0, 10);
   const isFriday = (dateValue: Date) => dateValue.getDay() === 5;
 
@@ -58,12 +64,19 @@ export default function BookingScreen() {
     orders.filter((order) => order.date === dateKey && order.serviceType === 'Service Bulanan').length;
 
   const submit = async () => {
-    if (!name || !phone || !bike) return Alert.alert('Lengkapi data');
+    const trimmedName = name.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedBike = bike.trim();
+    const trimmedComplaint = complaint.trim();
+
+    if (!trimmedName || !trimmedPhone || !trimmedBike) {
+      return Alert.alert('Lengkapi data');
+    }
     if (!date) return Alert.alert('Pilih tanggal');
     if (!service) return Alert.alert('Pilih jenis service');
     if (service === 'Service Bulanan' && !slot) return Alert.alert('Pilih slot waktu');
 
-    await reloadOrders();
+    await loadOrders();
     const dateKey = date;
 
     if (!availableForDate(dateKey, service)) {
@@ -77,17 +90,26 @@ export default function BookingScreen() {
       if (conflict) return Alert.alert('Maaf', 'Slot sudah terpakai');
     }
 
+    const now = new Date().toISOString();
     const order: Order = {
       id: String(Date.now()),
-      name,
-      phone,
-      bike,
+      name: trimmedName,
+      phone: trimmedPhone,
+      bike: trimmedBike,
       service: service === 'Service Besar' ? 'Service Besar' : 'Service Bulanan',
       serviceType: service,
       date: dateKey,
       slot: service === 'Service Bulanan' ? slot! : 'Full Day 09:00-17:00',
       status: 'Received',
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      complaint: trimmedComplaint,
+      queueNumber: null,
+      diagnosis: '',
+      repairAction: '',
+      replacedParts: [],
+      adminNotes: '',
+      updatedAt: now,
+      completedAt: null,
     };
 
     const saved = await saveOrder(order);
@@ -99,9 +121,10 @@ export default function BookingScreen() {
     setName('');
     setPhone('');
     setBike('');
+    setComplaint('');
     setDate(null);
     setSlot(null);
-    reloadOrders();
+    loadOrders();
   };
 
   return (
@@ -110,7 +133,7 @@ export default function BookingScreen() {
         <BrandLockup caption="Booking servis besar dan servis bulanan dengan slot yang lebih rapi." compact />
         <Text style={styles.heroTitle}>Booking Service</Text>
         <Text style={styles.heroSubtitle}>
-          Isi data kendaraan, pilih jenis servis, lalu tentukan tanggal yang tersedia.
+          Isi data kendaraan, pilih jenis servis, lalu tambahkan keluhan agar admin bisa menyiapkan penanganan lebih cepat.
         </Text>
       </View>
 
@@ -119,6 +142,19 @@ export default function BookingScreen() {
         <InputRow icon="person-outline" placeholder="Nama pelanggan" value={name} onChangeText={setName} />
         <InputRow icon="call-outline" placeholder="08xx..." value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
         <InputRow icon="bicycle-outline" placeholder="Contoh: Honda Vario" value={bike} onChangeText={setBike} />
+
+        <Text style={styles.sectionTitle}>Keluhan Kendaraan</Text>
+        <View style={styles.textAreaWrap}>
+          <TextInput
+            style={styles.textArea}
+            value={complaint}
+            onChangeText={setComplaint}
+            placeholder="Contoh: mesin brebet, rem belakang bunyi, oli cepat habis"
+            placeholderTextColor={GarageTheme.textDim}
+            multiline
+            textAlignVertical="top"
+          />
+        </View>
 
         <Text style={styles.sectionTitle}>Jadwal Servis</Text>
         <PickerRow label="Jenis service" icon="construct-outline" value={service} onPress={() => setShowServiceModal(true)} />
@@ -183,7 +219,7 @@ export default function BookingScreen() {
                 return (
                   <TouchableOpacity
                     disabled={disabled}
-                    style={[styles.modalItem, disabled && { opacity: 0.45 }]}
+                    style={[styles.modalItem, disabled && styles.modalItemDisabled]}
                     onPress={() => {
                       setDate(key);
                       setShowDateModal(false);
@@ -220,7 +256,7 @@ export default function BookingScreen() {
                 <TouchableOpacity
                   key={slotValue}
                   disabled={!date || !!taken}
-                  style={[styles.modalItem, (!date || taken) && { opacity: 0.45 }]}
+                  style={[styles.modalItem, (!date || taken) && styles.modalItemDisabled]}
                   onPress={() => {
                     setSlot(slotValue);
                     setShowSlotModal(false);
@@ -319,6 +355,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     marginBottom: 12,
+    marginTop: 8,
   },
   fieldLabel: {
     color: GarageTheme.textDim,
@@ -339,6 +376,20 @@ const styles = StyleSheet.create({
   },
   inputIcon: { marginRight: 10 },
   input: { color: GarageTheme.text, flex: 1, fontSize: 14 },
+  textAreaWrap: {
+    backgroundColor: GarageTheme.bgSoft,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: GarageTheme.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  textArea: {
+    color: GarageTheme.text,
+    minHeight: 96,
+    fontSize: 14,
+  },
   pickerText: { color: GarageTheme.text, flex: 1, fontSize: 14, fontWeight: '600' },
   button: {
     marginTop: 14,
@@ -358,6 +409,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: { color: GarageTheme.goldBright, fontWeight: '800', fontSize: 16, marginBottom: 12 },
   modalItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: GarageTheme.border },
+  modalItemDisabled: { opacity: 0.45 },
   modalItemText: { color: GarageTheme.text, fontWeight: '600' },
   modalMetaText: { color: GarageTheme.textDim, fontSize: 12, marginTop: 4 },
   modalTakenText: { color: GarageTheme.danger, marginTop: 4, fontSize: 12 },

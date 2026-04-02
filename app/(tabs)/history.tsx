@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { GarageTheme } from '@/constants/garage-theme';
 import OrderCard from '../components/OrderCard';
@@ -10,10 +11,15 @@ export default function HistoryScreen() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
 
-  useEffect(() => {
-    const load = async () => setOrders(await getOrders());
-    load();
+  const loadOrders = useCallback(async () => {
+    setOrders(await getOrders());
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadOrders();
+    }, [loadOrders])
+  );
 
   if (!user) {
     return <RequireAuthNotice message="Masuk untuk melihat riwayat booking, servis selesai, dan detail kendaraan Anda." />;
@@ -26,8 +32,11 @@ export default function HistoryScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <Text style={styles.eyebrow}>HISTORY</Text>
-        <Text style={styles.header}>Riwayat Pemesanan</Text>
-        <Text style={styles.subtitle}>Semua booking, servis aktif, dan servis selesai tersimpan di sini.</Text>
+        <Text style={styles.header}>Riwayat Servis</Text>
+        <Text style={styles.subtitle}>
+          Semua booking, status pengerjaan, keluhan awal, hasil perbaikan, kerusakan yang ditemukan, dan part yang diganti
+          akan tersimpan di sini.
+        </Text>
       </View>
 
       <View style={styles.statsRow}>

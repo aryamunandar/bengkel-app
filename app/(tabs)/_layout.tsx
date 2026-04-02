@@ -8,7 +8,7 @@ import { GarageTheme } from '@/constants/garage-theme';
 import BrandLockup from '../components/BrandLockup';
 import { useAuth } from '../context/AuthProvider';
 
-type DrawerRoute = 'index' | 'products' | 'artikel' | 'booking' | 'track' | 'history' | 'about';
+type DrawerRoute = 'index' | 'products' | 'artikel' | 'booking' | 'track' | 'history' | 'about' | 'admin';
 
 const DRAWER_ITEMS: Array<{
   label: string;
@@ -25,7 +25,13 @@ const DRAWER_ITEMS: Array<{
 ];
 
 function CustomDrawerContent(props: DrawerContentComponentProps) {
-  const { user, signOut } = useAuth();
+  const { user, isAdmin, signOut } = useAuth();
+  const drawerItems = isAdmin
+    ? [
+        ...DRAWER_ITEMS,
+        { label: '08 ADMIN', route: 'admin' as const, icon: 'shield-checkmark-outline' as const },
+      ]
+    : DRAWER_ITEMS;
 
   const goTo = (route: DrawerRoute) => {
     props.navigation.navigate(route);
@@ -41,7 +47,7 @@ function CustomDrawerContent(props: DrawerContentComponentProps) {
         </View>
       </View>
 
-      {DRAWER_ITEMS.map((item) => (
+      {drawerItems.map((item) => (
         <DrawerItem
           key={item.route}
           label={item.label}
@@ -92,6 +98,7 @@ export default function TabsLayout() {
       <Drawer.Screen name="track" options={{ title: 'Track Order' }} />
       <Drawer.Screen name="history" options={{ title: 'History' }} />
       <Drawer.Screen name="about" options={{ title: 'About' }} />
+      <Drawer.Screen name="admin" options={{ title: 'Admin' }} />
     </Drawer>
   );
 }

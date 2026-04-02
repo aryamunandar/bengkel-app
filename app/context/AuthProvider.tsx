@@ -1,16 +1,20 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import storage from '../utils/storage';
 import { isSupabaseConfigured, supabase, supabaseConfigHint } from '../utils/supabase';
+
+type UserRole = 'user' | 'admin';
 
 type AuthUser = {
   uid: string;
   email: string | null;
+  role: UserRole;
 };
 
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
+  isAdmin: boolean;
   signIn: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<boolean>;
@@ -34,8 +38,24 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+async function getUserRole(userId: string): Promise<UserRole> {
+  try {
+    const { data, error } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle();
+
+    if (error) {
+      console.warn('getUserRole error', error);
+      return 'user';
+    }
+
+    return data?.role === 'admin' ? 'admin' : 'user';
+  } catch (error) {
+    console.warn('getUserRole error', error);
+    return 'user';
+  }
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<AuthUser | null | undefined>(undefined); // undefined = loading, null = logged out
+  const [user, setUser] = useState<AuthUser | null | undefined>(undefined);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -43,6 +63,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(null);
       return;
     }
+
     let isMounted = true;
 
     const syncUser = async (nextUser: { id: string; email?: string | null } | null) => {
@@ -50,15 +71,29 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
-      setUser(nextUser ? { uid: nextUser.id, email: nextUser.email ?? null } : null);
       storage.configureBackend(nextUser?.id ?? null);
 
-      if (nextUser) {
-        try {
-          await storage.migrateLocalToBackend(nextUser.id);
-        } catch (e) {
-          console.warn('migration failed', e);
-        }
+      if (!nextUser) {
+        setUser(null);
+        return;
+      }
+
+      const role = await getUserRole(nextUser.id);
+
+      if (!isMounted) {
+        return;
+      }
+
+      setUser({
+        uid: nextUser.id,
+        email: nextUser.email ?? null,
+        role,
+      });
+
+      try {
+        await storage.migrateLocalToBackend(nextUser.id);
+      } catch (error) {
+        console.warn('migration failed', error);
       }
     };
 
@@ -82,9 +117,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await syncUser(session?.user ?? null);
     });
 
+    const appStateSubscription = AppState.addEventListener('change', async (state) => {
+      if (state !== 'active' || !isMounted) {
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn('refreshSession error', error);
+          return;
+        }
+
+        await syncUser(data.session?.user ?? null);
+      } catch (error) {
+        console.warn('refreshSession error', error);
+      }
+    });
+
     return () => {
       isMounted = false;
       authListener.subscription.unsubscribe();
+      appStateSubscription.remove();
     };
   }, []);
 
@@ -94,14 +148,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
         Alert.alert('Login error', supabaseConfigHint);
         return false;
       }
+
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         Alert.alert('Login error', error.message);
         return false;
       }
+
       return true;
-    } catch (e: unknown) {
-      Alert.alert('Login error', getErrorMessage(e));
+    } catch (error: unknown) {
+      Alert.alert('Login error', getErrorMessage(error));
       return false;
     }
   };
@@ -112,11 +168,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         Alert.alert('Register error', supabaseConfigHint);
         return false;
       }
+
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) {
         Alert.alert('Register error', error.message);
         return false;
       }
+
       if (!data.session) {
         const signInResult = await supabase.auth.signInWithPassword({ email, password });
         if (signInResult.error) {
@@ -124,9 +182,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return false;
         }
       }
+
       return true;
-    } catch (e: unknown) {
-      Alert.alert('Register error', getErrorMessage(e));
+    } catch (error: unknown) {
+      Alert.alert('Register error', getErrorMessage(error));
       return false;
     }
   };
@@ -136,22 +195,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (!isSupabaseConfigured) {
         return false;
       }
+
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.warn('signOut error', error);
         return false;
       }
+
       return true;
-    } catch (e: unknown) {
-      console.warn('signOut error', e);
+    } catch (error: unknown) {
+      console.warn('signOut error', error);
       return false;
     }
   };
 
   const loading = user === undefined;
+  const isAdmin = user?.role === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user: user ?? null, loading, signIn, register, signOut }}>
+    <AuthContext.Provider value={{ user: user ?? null, loading, isAdmin, signIn, register, signOut }}>
       {children}
     </AuthContext.Provider>
   );
