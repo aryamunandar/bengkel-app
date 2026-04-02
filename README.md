@@ -194,6 +194,7 @@ npx expo export --platform android --output-dir .expo-export-test
 - Jika role admin baru tidak langsung muncul, logout lalu login lagi.
 - Jika perubahan UI tidak terlihat, jalankan `npm run start:clear`.
 - Splash, logo, dan branding utama memakai asset di `assets/images/logo.png`.
+- Checklist kesiapan rilis ada di [PRODUCTION-CHECKLIST.md](/c:/Users/aryamundr/bengkel-app/PRODUCTION-CHECKLIST.md).
 
 ## Status Project Saat Ini
 
