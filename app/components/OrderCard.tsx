@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { GarageStatusColors, GarageTheme } from '@/constants/garage-theme';
+import { formatCurrency, getInvoiceNumber, getOrderTotal } from '../utils/order-summary';
 import type { Order } from '../utils/storage';
 
 type OrderCardProps = {
@@ -13,6 +14,8 @@ export default function OrderCard({ order, onAdvance, onPress }: OrderCardProps)
   const color = GarageStatusColors[order.status] || GarageTheme.goldBright;
   const scale = useRef(new Animated.Value(1)).current;
   const hasServiceHistory = Boolean(order.diagnosis || order.repairAction || order.adminNotes || order.replacedParts.length);
+  const hasInvoice = order.serviceCost > 0 || order.partsCost > 0;
+  const totalCost = getOrderTotal(order);
 
   const onPressIn = () => Animated.spring(scale, { toValue: 0.985, useNativeDriver: true }).start();
   const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
@@ -52,7 +55,17 @@ export default function OrderCard({ order, onAdvance, onPress }: OrderCardProps)
         {order.repairAction ? <InfoBlock label="Perbaikan" value={order.repairAction} /> : null}
         {order.replacedParts.length ? <InfoBlock label="Part diganti" value={order.replacedParts.join(', ')} /> : null}
         {order.adminNotes ? <InfoBlock label="Catatan admin" value={order.adminNotes} /> : null}
-        {order.completedAt ? <InfoBlock label="Selesai" value={new Date(order.completedAt).toLocaleString()} /> : null}
+
+        {hasInvoice ? (
+          <>
+            <InfoBlock label="No. Invoice" value={getInvoiceNumber(order)} />
+            <InfoBlock label="Biaya servis" value={formatCurrency(order.serviceCost)} />
+            <InfoBlock label="Biaya part" value={formatCurrency(order.partsCost)} />
+            <InfoBlock label="Total" value={formatCurrency(totalCost)} />
+          </>
+        ) : null}
+
+        {order.completedAt ? <InfoBlock label="Selesai" value={new Date(order.completedAt).toLocaleString('id-ID')} /> : null}
 
         {!hasServiceHistory ? (
           <Text style={styles.pendingText}>Riwayat servis detail akan muncul setelah admin mengisi hasil pengecekan.</Text>

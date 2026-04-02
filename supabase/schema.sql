@@ -92,6 +92,8 @@ alter table public.orders
   add column if not exists repair_action text not null default '',
   add column if not exists replaced_parts text[] not null default '{}',
   add column if not exists admin_notes text not null default '',
+  add column if not exists service_cost integer not null default 0,
+  add column if not exists parts_cost integer not null default 0,
   add column if not exists updated_at timestamptz not null default timezone('utc', now()),
   add column if not exists completed_at timestamptz;
 

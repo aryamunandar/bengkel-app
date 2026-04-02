@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isSupabaseConfigured, supabase } from './supabase';
 
-const ORDERS_KEY = 'orders_v2';
-const LEGACY_ORDERS_KEY = 'orders_v1';
+const ORDERS_KEY = 'orders_v3';
+const LEGACY_ORDER_KEYS = ['orders_v2', 'orders_v1'];
 
 export const ORDER_STATUSES = ['Received', 'In Progress', 'Ready', 'Completed'] as const;
 
@@ -25,6 +25,8 @@ export type Order = {
   repairAction: string;
   replacedParts: string[];
   adminNotes: string;
+  serviceCost: number;
+  partsCost: number;
   updatedAt: string;
   completedAt: string | null;
 };
@@ -49,6 +51,8 @@ type OrderRow = {
   repair_action: string | null;
   replaced_parts: string[] | null;
   admin_notes: string | null;
+  service_cost: number | null;
+  parts_cost: number | null;
   created_at: string;
   updated_at: string | null;
   completed_at: string | null;
@@ -70,7 +74,27 @@ function normalizeParts(parts: unknown): string[] {
     .filter(Boolean);
 }
 
-function normalizeOrder(order: Partial<Order> & Pick<Order, 'id' | 'name' | 'phone' | 'bike' | 'service' | 'serviceType' | 'date' | 'slot'>): Order {
+function normalizeAmount(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.round(value));
+  }
+
+  if (typeof value === 'string') {
+    const digits = value.replace(/[^\d]/g, '');
+    if (!digits) {
+      return 0;
+    }
+
+    return Math.max(0, Number(digits));
+  }
+
+  return 0;
+}
+
+function normalizeOrder(
+  order: Partial<Order> &
+    Pick<Order, 'id' | 'name' | 'phone' | 'bike' | 'service' | 'serviceType' | 'date' | 'slot'>
+): Order {
   const createdAt = order.createdAt ?? new Date().toISOString();
 
   return {
@@ -90,6 +114,8 @@ function normalizeOrder(order: Partial<Order> & Pick<Order, 'id' | 'name' | 'pho
     repairAction: order.repairAction ?? '',
     replacedParts: normalizeParts(order.replacedParts),
     adminNotes: order.adminNotes ?? '',
+    serviceCost: normalizeAmount(order.serviceCost),
+    partsCost: normalizeAmount(order.partsCost),
     updatedAt: order.updatedAt ?? createdAt,
     completedAt: order.completedAt ?? null,
   };
@@ -100,6 +126,14 @@ function normalizePatch(patch: OrderPatch): OrderPatch {
 
   if (patch.replacedParts !== undefined) {
     next.replacedParts = normalizeParts(patch.replacedParts);
+  }
+
+  if (patch.serviceCost !== undefined) {
+    next.serviceCost = normalizeAmount(patch.serviceCost);
+  }
+
+  if (patch.partsCost !== undefined) {
+    next.partsCost = normalizeAmount(patch.partsCost);
   }
 
   if (patch.status === 'Completed' && patch.completedAt === undefined) {
@@ -135,6 +169,8 @@ function fromRow(row: OrderRow): Order {
     repairAction: row.repair_action ?? '',
     replacedParts: row.replaced_parts ?? [],
     adminNotes: row.admin_notes ?? '',
+    serviceCost: row.service_cost ?? 0,
+    partsCost: row.parts_cost ?? 0,
     updatedAt: row.updated_at ?? row.created_at,
     completedAt: row.completed_at ?? null,
   });
@@ -158,6 +194,8 @@ function toRow(order: Order, userId: string) {
     repair_action: order.repairAction,
     replaced_parts: normalizeParts(order.replacedParts),
     admin_notes: order.adminNotes,
+    service_cost: normalizeAmount(order.serviceCost),
+    parts_cost: normalizeAmount(order.partsCost),
     created_at: order.createdAt,
     updated_at: order.updatedAt,
     completed_at: order.completedAt,
@@ -181,6 +219,8 @@ function toPatch(patch: OrderPatch) {
   if (patch.repairAction !== undefined) next.repair_action = patch.repairAction;
   if (patch.replacedParts !== undefined) next.replaced_parts = normalizeParts(patch.replacedParts);
   if (patch.adminNotes !== undefined) next.admin_notes = patch.adminNotes;
+  if (patch.serviceCost !== undefined) next.service_cost = normalizeAmount(patch.serviceCost);
+  if (patch.partsCost !== undefined) next.parts_cost = normalizeAmount(patch.partsCost);
   if (patch.updatedAt !== undefined) next.updated_at = patch.updatedAt;
   if (patch.completedAt !== undefined) next.completed_at = patch.completedAt;
 
@@ -189,12 +229,25 @@ function toPatch(patch: OrderPatch) {
 
 async function readLocalOrders(): Promise<Order[]> {
   try {
-    const raw = (await AsyncStorage.getItem(ORDERS_KEY)) ?? (await AsyncStorage.getItem(LEGACY_ORDERS_KEY));
+    let raw = await AsyncStorage.getItem(ORDERS_KEY);
+
+    if (!raw) {
+      for (const key of LEGACY_ORDER_KEYS) {
+        raw = await AsyncStorage.getItem(key);
+        if (raw) {
+          break;
+        }
+      }
+    }
+
     if (!raw) {
       return [];
     }
 
-    const parsed = JSON.parse(raw) as Array<Partial<Order> & Pick<Order, 'id' | 'name' | 'phone' | 'bike' | 'service' | 'serviceType' | 'date' | 'slot'>>;
+    const parsed = JSON.parse(raw) as Array<
+      Partial<Order> & Pick<Order, 'id' | 'name' | 'phone' | 'bike' | 'service' | 'serviceType' | 'date' | 'slot'>
+    >;
+
     return parsed.map((item) => normalizeOrder(item));
   } catch (error) {
     console.warn('readLocalOrders error', error);
@@ -205,7 +258,10 @@ async function readLocalOrders(): Promise<Order[]> {
 async function writeLocalOrders(orders: Order[]) {
   const normalized = orders.map((order) => normalizeOrder(order));
   await AsyncStorage.setItem(ORDERS_KEY, JSON.stringify(normalized));
-  await AsyncStorage.removeItem(LEGACY_ORDERS_KEY);
+
+  for (const key of LEGACY_ORDER_KEYS) {
+    await AsyncStorage.removeItem(key);
+  }
 }
 
 export function configureBackend(userId: string | null) {
@@ -357,7 +413,9 @@ export async function clearOrders() {
     }
 
     await AsyncStorage.removeItem(ORDERS_KEY);
-    await AsyncStorage.removeItem(LEGACY_ORDERS_KEY);
+    for (const key of LEGACY_ORDER_KEYS) {
+      await AsyncStorage.removeItem(key);
+    }
   } catch (error) {
     console.warn('clearOrders error', error);
   }
@@ -386,7 +444,9 @@ export async function migrateLocalToBackend(userId: string) {
     }
 
     await AsyncStorage.removeItem(ORDERS_KEY);
-    await AsyncStorage.removeItem(LEGACY_ORDERS_KEY);
+    for (const key of LEGACY_ORDER_KEYS) {
+      await AsyncStorage.removeItem(key);
+    }
   } catch (error) {
     console.warn('migrateLocalToBackend error', error);
   }

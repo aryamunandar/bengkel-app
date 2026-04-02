@@ -5,6 +5,7 @@ import { GarageTheme } from '@/constants/garage-theme';
 import OrderCard from '../components/OrderCard';
 import RequireAuthNotice from '../components/RequireAuthNotice';
 import { useAuth } from '../context/AuthProvider';
+import { formatCurrency, getOrderTotal } from '../utils/order-summary';
 import { getOrders, type Order } from '../utils/storage';
 
 export default function HistoryScreen() {
@@ -27,6 +28,9 @@ export default function HistoryScreen() {
 
   const activeCount = orders.filter((order) => order.status !== 'Completed').length;
   const doneCount = orders.filter((order) => order.status === 'Completed').length;
+  const totalSpent = orders
+    .filter((order) => order.status === 'Completed')
+    .reduce((sum, order) => sum + getOrderTotal(order), 0);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -48,6 +52,12 @@ export default function HistoryScreen() {
           <Text style={styles.statLabel}>Selesai</Text>
           <Text style={styles.statValue}>{doneCount}</Text>
         </View>
+      </View>
+
+      <View style={styles.totalCard}>
+        <Text style={styles.totalLabel}>Total biaya servis selesai</Text>
+        <Text style={styles.totalValue}>{formatCurrency(totalSpent)}</Text>
+        <Text style={styles.totalHint}>Nilai ini akan terisi otomatis setelah admin mengisi biaya servis dan biaya part.</Text>
       </View>
 
       {orders.length === 0 ? <Text style={styles.empty}>Belum ada riwayat.</Text> : null}
@@ -85,5 +95,16 @@ const styles = StyleSheet.create({
   },
   statLabel: { color: GarageTheme.textDim, fontSize: 12, marginBottom: 6 },
   statValue: { color: GarageTheme.text, fontSize: 26, fontWeight: '900' },
+  totalCard: {
+    backgroundColor: GarageTheme.bgElevated,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: GarageTheme.border,
+    padding: 16,
+    marginBottom: 14,
+  },
+  totalLabel: { color: GarageTheme.textDim, fontSize: 12, marginBottom: 6 },
+  totalValue: { color: GarageTheme.goldBright, fontSize: 24, fontWeight: '900', marginBottom: 4 },
+  totalHint: { color: GarageTheme.textMuted, fontSize: 12, lineHeight: 18 },
   empty: { color: GarageTheme.textMuted, marginTop: 4, marginBottom: 12 },
 });

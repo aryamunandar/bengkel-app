@@ -108,6 +108,8 @@ export default function BookingScreen() {
       repairAction: '',
       replacedParts: [],
       adminNotes: '',
+      serviceCost: 0,
+      partsCost: 0,
       updatedAt: now,
       completedAt: null,
     };
